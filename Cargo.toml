@@ -1,0 +1,20 @@
+[package]
+name = "register-my-day"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "register-my-day"
+
+[dependencies]
+rusqlite = { version = "0.30.0", features = ["bundled"]}
+chrono = "*"
+regex = "*"
+
+[dependencies.uuid]
+version = "*"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
