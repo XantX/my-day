@@ -15,8 +15,13 @@ struct Task {
 }
 
 fn config_connection() -> Connection {
+    let current_path_exe = env::current_exe().expect("Error to read app path");
+    let current_directory = current_path_exe.parent().expect("Errorto read current directoy");
+    let exe_path_str = current_directory.to_string_lossy().replace("\\", "/");
 
-    let connection = Connection::open("task.db").expect("Error al conectar con la base de datos");
+    let path = format!("{}/{}", exe_path_str, "task.db");
+
+    let connection = Connection::open(path).expect("Error al conectar con la base de datos");
 
     connection.execute("CREATE TABLE IF NOT EXISTS TASK (
                 id TEXT PRIMARY KEY UNIQUE,
