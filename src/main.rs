@@ -11,7 +11,7 @@ struct Task {
     descripcion: String,
     time: String,
     task_url: String,
-    create_date: Option<String>
+    create_datetime: Option<String>
 }
 
 fn config_connection() -> Connection {
@@ -28,7 +28,7 @@ fn config_connection() -> Connection {
                 descripcion TEXT NOT NULL,
                 time TEXT NOT NULL,
                 task_url TEXT NOT NULL,
-                create_date DATE DEFAULT CURRENT_DATE
+                create_datetime DATETIME DEFAULT CURRENT_TIMESTAMP
             );",
             [],).expect("Error al ejecutar la consulta create SQL");
 
@@ -46,30 +46,27 @@ fn request_data() -> Task {
         println!("Ingrese la descripcion de lo realizado");
         io::stdin().read_line(&mut description).expect("Failed to read line");
         if description.trim() != "" {
-            println!("La descripcion de la tarea es: {}", description);
             break;
         }
-        println!("Ingrese un valor para la descripcion de la tarea")
+        println!("Ingrese la descripcion de lo realizado")
     }
 
     loop {
         println!("Ingrese el tiempo dedicado");
         io::stdin().read_line(&mut time).expect("Failed to read line");
         if time.trim() != "" {
-            println!("El tiempo dedicado es de {}", time);
             break;
         }
-        println!("Ingrese un valor para el tiempo dedicado")
+        println!("Ingrese el tiempo dedicado")
     }
 
     loop {
         println!("Ingrese la url de la tarea");
         io::stdin().read_line(&mut task_url).expect("Failed to read line");
         if task_url.trim() != "" {
-            println!("La url escrita es {}", task_url);
             break;
         }
-        println!("Ingrese un valor para la url de la tarea");
+        println!("Ingrese la url de la tarea");
     }
 
     let new_task = Task{
@@ -77,7 +74,7 @@ fn request_data() -> Task {
         descripcion: String::from(description),
         time: String::from(time),
         task_url: String::from(task_url),
-        create_date: None
+        create_datetime: None
     };
 
     return new_task;
@@ -89,11 +86,11 @@ fn create_new_task(connection: Connection) {
     connection.execute(
         "INSERT INTO TASK (id, descripcion, time, task_url) VALUES (?, ?, ?, ?)",
         params![new_task.id, new_task.descripcion, new_task.time, new_task.task_url],
-    ).expect("Erro on execute insert to task table");
+    ).expect("Error on execute insert to task table");
 }
 
 fn read_task_by_date(connection: Connection, date: &str) {
-    let mut stmt = connection.prepare("SELECT id, descripcion, time, task_url, create_date FROM TASK WHERE create_date = ?").expect("Error on request data with select query");
+    let mut stmt = connection.prepare("SELECT id, descripcion, time, task_url, create_datetime FROM TASK WHERE DATE(create_datetime) = ?").expect("Error on request data with select query");
 
     let task_iter = stmt.query_map(&[&date], |row| {
         Ok(Task {
@@ -101,11 +98,10 @@ fn read_task_by_date(connection: Connection, date: &str) {
             descripcion: row.get(1)?,
             time: row.get(2)?,
             task_url: row.get(3)?,
-            create_date: row.get(4)?
+            create_datetime: row.get(4)?
         })
     }).expect("Error mapping data to task entity");
 
-    println!("Data from {}", date);
     for task in task_iter {
         let task_result = task.unwrap();
         println!("=========================================");
@@ -113,7 +109,7 @@ fn read_task_by_date(connection: Connection, date: &str) {
         println!("Description: {:?}", task_result.descripcion);
         println!("Time : {:?}", task_result.time);
         println!("Task url: {:?}", task_result.task_url);
-        println!("Create Date: {:?}", task_result.create_date);
+        println!("Create Date: {:?}", task_result.create_datetime);
     }
 }
 
@@ -139,6 +135,8 @@ fn main() -> Result<()> {
                     formatted_date = _complement.to_owned()
                 }
             }
+
+            println!("Data from: {}", today.format("%Y-%m-%d %H:%M:%S %Z").to_string());
             read_task_by_date(connection, formatted_date.as_str())
         },
         _ => println!("Unhandle command")
