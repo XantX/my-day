@@ -89,10 +89,53 @@ fn create_new_task(connection: Connection) {
     ).expect("Error on execute insert to task table");
 }
 
-fn read_task_by_date(connection: Connection, date: &str) {
-    let mut stmt = connection.prepare("SELECT id, descripcion, time, task_url, create_datetime FROM TASK WHERE DATE(create_datetime) = ?").expect("Error on request data with select query");
+fn convertir_a_utc0(fecha: Option<DateTime<FixedOffset>>) -> Option<DateTime<Utc>> {
+    fecha.and_then(|f| Some(f.with_timezone(&Utc)))
+}
 
-    let task_iter = stmt.query_map(&[&date], |row| {
+fn convertir_a_zona_horaria(fecha_utc: &str, zona_horaria: &str) -> Result<String, &'static str> {
+    // Parsear la fecha en formato UTC
+    let fecha_utc = DateTime::parse_from_str(format!("{} {}",fecha_utc, "+00:00").as_str(), "%Y-%m-%d %H:%M:%S %z")
+        .map_err(|_| "Error al parsear la fecha en formato UTC")?
+        .with_timezone(&Utc);
+
+    // Obtener el desplazamiento de la zona horaria
+    let desplazamiento = zona_horaria.replace("+", "").replace(":00", "").parse::<i32>().map_err(|_| "Error al parsear el desplazamiento de la zona horaria")?;
+    
+    // Crear el objeto FixedOffset con el desplazamiento
+    let zona_horaria_obj = FixedOffset::east_opt(desplazamiento * 3600).expect("Error to setup timezone");
+
+    // Convertir la fecha a la zona horaria especificada
+    let fecha_zona_horaria = fecha_utc.with_timezone(&zona_horaria_obj);
+
+    // Formatear la fecha en la nueva zona horaria
+    let fecha_formateada = fecha_zona_horaria.format("%Y-%m-%d %H:%M:%S").to_string();
+
+    Ok(fecha_formateada)
+}
+
+fn read_task_by_date(connection: Connection, date: &str, datetime: &str) {
+    let start_date_str = format!("{} {} {}", date, "00:00:00", datetime);
+    let end_date_str = format!("{} {} {}", date, "23:59:00", datetime);
+
+    // Convertir las cadenas a objetos DateTime<FixedOffset> en UTC-5
+    let start_date_utc5 = DateTime::parse_from_str(start_date_str.as_str(), "%Y-%m-%d %H:%M:%S %z")
+        .expect("Error parsing start date");
+        
+    let end_date_utc5 = DateTime::parse_from_str(end_date_str.as_str(), "%Y-%m-%d %H:%M:%S %z")
+        .expect("Error parsing end date");
+
+    // Convertir las fechas a UTC+0
+    let start_date_utc0 = convertir_a_utc0(Some(start_date_utc5)).expect("Error to convert start date to utc0");
+    let end_date_utc0 = convertir_a_utc0(Some(end_date_utc5)).expect("Error to convert end date to utc0");
+
+    let mut stmt = connection
+        .prepare("SELECT id, descripcion, time, task_url, create_datetime FROM TASK WHERE create_datetime BETWEEN ? AND ?")
+        .expect("Error on request data with select query");
+
+
+    let task_iter = stmt.query_map(&[&start_date_utc0.format("%Y-%m-%d %H:%M:%S").to_string(),
+                                    &end_date_utc0.format("%Y-%m-%d %H:%M:%S").to_string()], |row| {
         Ok(Task {
             id: row.get(0)?,
             descripcion: row.get(1)?,
@@ -109,7 +152,8 @@ fn read_task_by_date(connection: Connection, date: &str) {
         println!("Description: {:?}", task_result.descripcion);
         println!("Time : {:?}", task_result.time);
         println!("Task url: {:?}", task_result.task_url);
-        println!("Create Date: {:?}", task_result.create_datetime);
+        let date_with_timezone = convertir_a_zona_horaria(task_result.create_datetime.expect("Erro to get create_datetime").as_str(), datetime);
+        println!("Create Date: {:?}", date_with_timezone.unwrap());
     }
 }
 
@@ -137,7 +181,7 @@ fn main() -> Result<()> {
             }
 
             println!("Data from: {}", today.format("%Y-%m-%d %H:%M:%S %Z").to_string());
-            read_task_by_date(connection, formatted_date.as_str())
+            read_task_by_date(connection, formatted_date.as_str(), today.format("%Z").to_string().as_str())
         },
         _ => println!("Unhandle command")
     }
